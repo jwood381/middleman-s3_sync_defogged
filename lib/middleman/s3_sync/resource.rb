@@ -20,7 +20,7 @@ module Middleman
 
       # S3 resource as returned by a HEAD request
       def full_s3_resource
-        @full_s3_resource ||= bucket.files.head(remote_path)
+        @full_s3_resource ||= client.head_object(bucket:Middleman::S3Sync.s3_sync_options.bucket,key:remote_path)
       end
 
       def remote_path
@@ -82,13 +82,19 @@ module Middleman
 
       def destroy!
         say_status "#{ANSI.red{"Deleting"}} #{remote_path}"
-        bucket.files.destroy remote_path unless options.dry_run
+        #bucket.files.destroy remote_path unless options.dry_run
+        bucket.delete_objects(
+                  delete: {
+                      key: remote_path
+                  }
+        ) unless options.dry_run
       end
 
       def create!
         say_status "#{ANSI.green{"Creating"}} #{remote_path}#{ gzipped ? ANSI.white {' (gzipped)'} : ''}"
         local_content { |body|
-          bucket.files.create(to_h.merge(body: body)) unless options.dry_run
+          #bucket.files.create(to_h.merge(body: body)) unless options.dry_run
+          bucket.put_object(to_h.merge(body:body))
         }
       end
 
@@ -260,6 +266,10 @@ module Middleman
       protected
       def bucket
         Middleman::S3Sync.bucket
+      end
+
+      def client
+        Middleman::S3Sync.client
       end
 
       def build_dir

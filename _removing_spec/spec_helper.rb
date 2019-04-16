@@ -20,6 +20,6 @@ RSpec.configure do |config|
   config.order = 'random'
 
   config.before :all do
-    Fog.mock!
+    #Fog.mock!
   end
 end

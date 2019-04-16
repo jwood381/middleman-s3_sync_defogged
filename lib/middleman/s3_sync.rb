@@ -1,5 +1,8 @@
-require 'fog/aws'
-require 'fog/aws/storage'
+#require 'fog/aws'
+#require 'fog/aws/storage'
+
+require 'aws-s3'
+
 require 'digest/md5'
 require 'middleman/s3_sync/version'
 require 'middleman/s3_sync/options'
@@ -20,6 +23,7 @@ module Middleman
 
       @@bucket_lock = Mutex.new
       @@bucket_files_lock = Mutex.new
+      @@client_lock = Mutex.new
 
       attr_accessor :s3_sync_options
       attr_accessor :mm_resources
@@ -48,15 +52,29 @@ module Middleman
         delete_resources
       end
 
+
+
       def bucket
         @@bucket_lock.synchronize do
           @bucket ||= begin
-                        bucket = connection.directories.get(s3_sync_options.bucket, :prefix => s3_sync_options.prefix)
-                        raise "Bucket #{s3_sync_options.bucket} doesn't exist!" unless bucket
-                        bucket
-                      end
+            #bucket = connection.directories.get(s3_sync_options.bucket, :prefix => s3_sync_options.prefix
+            #
+            bucket = S3::Bucket.new(s3_sync_options.bucket, client:client)
+            raise "Bucket #{s3_sync_options.bucket} doesn't exist!" unless bucket and bucket.exists?
+            bucket
+          end
         end
       end
+
+      # def bucket
+      #   @@bucket_lock.synchronize do
+      #     @bucket ||= begin
+      #                   bucket = connection.directories.get(s3_sync_options.bucket, :prefix => s3_sync_options.prefix)
+      #                   raise "Bucket #{s3_sync_options.bucket} doesn't exist!" unless bucket
+      #                   bucket
+      #                 end
+      #   end
+      # end
 
       def add_local_resource(mm_resource)
         s3_sync_resources[mm_resource.destination_path] = S3Sync::Resource.new(mm_resource, remote_resource_for_path(mm_resource.destination_path)).tap(&:status)
@@ -76,47 +94,74 @@ module Middleman
 
       protected
       def update_bucket_versioning
-        connection.put_bucket_versioning(s3_sync_options.bucket, "Enabled") if s3_sync_options.version_bucket
+        client.put_bucket_versioning(bucket:s3_sync_options.bucket,status:"Enabled") if s3_sync_options.version_bucket
       end
 
       def update_bucket_website
-        opts = {}
-        opts[:IndexDocument] = s3_sync_options.index_document if s3_sync_options.index_document
-        opts[:ErrorDocument] = s3_sync_options.error_document if s3_sync_options.error_document
+        opts = {bucket:s3_sync_options.bucket,website_configuration:{}}
 
-        if opts[:ErrorDocument] && !opts[:IndexDocument]
+        opts[:website_configuration][:index_document] = s3_sync_options.index_document if s3_sync_options.index_document
+        opts[:website_configuration][:error_document] = s3_sync_options.error_document if s3_sync_options.error_document
+
+        if opts[:website_configuration][:error_document] && !opts[:website_configuration][:index_document]
           raise 'S3 requires `index_document` if `error_document` is specified'
         end
 
         unless opts.empty?
           say_status "Putting bucket website: #{opts.to_json}"
-          connection.put_bucket_website(s3_sync_options.bucket, opts)
+          client.put_bucket_website(opts)
         end
       end
 
-      def connection
-        connection_options = {
-          :endpoint => s3_sync_options.endpoint,
-          :region => s3_sync_options.region,
-          :path_style => s3_sync_options.path_style
-        }
+      def client
 
-        if s3_sync_options.aws_access_key_id && s3_sync_options.aws_secret_access_key
-          connection_options.merge!({
-            :aws_access_key_id => s3_sync_options.aws_access_key_id,
-            :aws_secret_access_key => s3_sync_options.aws_secret_access_key
-          })
+        @@client_lock.synchronize do
+          @client ||= begin
+            client_options = {
+                endpoint: s3_sync_options.endpoint,
+                region:s3_sync_options.region,
+                credentials:nil
+            }
 
-          # If using a assumed role
-          connection_options.merge!({
-            :aws_session_token => s3_sync_options.aws_session_token
-          }) if s3_sync_options.aws_session_token
-        else
-          connection_options.merge!({ :use_iam_profile => true })
+            if s3_sync_options.aws_access_key_id && s3_sync_options.aws_secret_access_key
+              client_options[:credentials] = Aws::Credentials.new(
+                  s3_sync_options.aws_access_key_id,
+                  s3_sync_options.aws_secret_access_key,
+                  s3_sync_options.aws_session_token
+              )
+            else
+              client_options[:credentials] = Aws::InstanceProfileCredentials.new
+            end
+
+            Aws::S3::Client.new(client_options)
+          end
+
         end
-
-        @connection ||= Fog::Storage::AWS.new(connection_options)
       end
+
+      # def connection
+      #   connection_options = {
+      #     :endpoint => s3_sync_options.endpoint,
+      #     :region => s3_sync_options.region,
+      #     :path_style => s3_sync_options.path_style
+      #   }
+      #
+      #   if s3_sync_options.aws_access_key_id && s3_sync_options.aws_secret_access_key
+      #     connection_options.merge!({
+      #       :aws_access_key_id => s3_sync_options.aws_access_key_id,
+      #       :aws_secret_access_key => s3_sync_options.aws_secret_access_key
+      #     })
+      #
+      #     # If using a assumed role
+      #     connection_options.merge!({
+      #       :aws_session_token => s3_sync_options.aws_session_token
+      #     }) if s3_sync_options.aws_session_token
+      #   else
+      #     connection_options.merge!({ :use_iam_profile => true })
+      #   end
+      #   #@connection ||= Fog::Storage::AWS.new(connection_options)
+      #   @connection ||= Aws::S3::Client.new(connection_options)
+      # end
 
       def remote_resource_for_path(path)
         bucket_files.find { |f| f.key == "#{s3_sync_options.prefix}#{path}" }
@@ -143,12 +188,27 @@ module Middleman
       def bucket_files
         @@bucket_files_lock.synchronize do
           @bucket_files ||= [].tap { |files|
-            bucket.files.each { |f|
-              files << f
-            }
+            # bucket.files.each { |f|
+            #   files << f
+            # }
+            h={}
+            h[:prefix]=s3_sync_options.prefix if s3_sync_options.prefix
+            bucket.objects(h).each do |object_summary|
+              files<<object_summary.key
+            end
           }
         end
       end
+
+      # def bucket_files
+      #   @@bucket_files_lock.synchronize do
+      #     @bucket_files ||= [].tap { |files|
+      #       bucket.files.each { |f|
+      #         files << f
+      #       }
+      #     }
+      #   end
+      # end
 
       def create_resources
         Parallel.map(files_to_create, in_threads: THREADS_COUNT, &:create!)

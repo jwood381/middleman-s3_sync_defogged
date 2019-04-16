@@ -1,6 +1,11 @@
+
+
 # Middleman::S3Sync Changelog
 
 The gem that tries really hard not to push files to S3.
+
+##DEFOGGED
+Fog removed in favor aws-sdk
 
 ## v4.0.1
 
