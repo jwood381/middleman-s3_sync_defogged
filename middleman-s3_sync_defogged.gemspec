@@ -4,7 +4,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require 'middleman/s3_sync/version'
 
 Gem::Specification.new do |gem|
-  gem.name          = "middleman-s3_sync"
+  gem.name          = "middleman-s3_sync_defogged"
   gem.version       = Middleman::S3Sync::VERSION
   gem.authors       = ["Frederic Jean", "Will Koehler","Jeremy Wood"]
   gem.email         = ["jwood@pearlcomm.com"]
