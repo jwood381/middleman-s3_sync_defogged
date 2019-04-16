@@ -29,7 +29,7 @@ module Middleman
       end
 
       def remote_path
-        s3_resource ? s3_resource.key : "#{options.prefix}#{path}"
+        s3_resource and s3_resource.is_a?(String) ? s3_resource : "#{options.prefix}#{path}"
       end
       alias :key :remote_path
 
@@ -71,12 +71,15 @@ module Middleman
       alias :attributes :to_h
 
       def update!
+
         local_content { |body|
           say_status "#{ANSI.blue{"Updating"}} #{remote_path}#{ gzipped ? ANSI.white {' (gzipped)'} : ''}"
-          s3_resource.merge_attributes(to_h)
-          s3_resource.body = body
 
-          s3_resource.save unless options.dry_run
+
+          #s3_resource.merge_attributes(to_h)
+          #s3_resource.body = body
+          #s3_resource.save unless options.dry_run
+          create!(true)
         }
       end
 
@@ -99,8 +102,8 @@ module Middleman
         ) unless options.dry_run
       end
 
-      def create!
-        say_status "#{ANSI.green{"Creating"}} #{remote_path}#{ gzipped ? ANSI.white {' (gzipped)'} : ''}"
+      def create!(quiet=false)
+        say_status "#{ANSI.green{"Creating"}} #{remote_path}#{ gzipped ? ANSI.white {' (gzipped)'} : ''}" unless quiet
 
         local_content { |body|
           #bucket.files.create(to_h.merge(body: body)) unless options.dry_run
@@ -109,7 +112,7 @@ module Middleman
           rescue Exception => e
             puts e.message
             puts "Caught it"
-            puts to_h.merge(body:body)
+            #puts to_h.merge(body:body)
           end
         }
       end
@@ -164,16 +167,27 @@ module Middleman
                       end
                     elsif local? && remote?
                       if options.force
+                        puts 1
                         :updated
                       elsif not metadata_match?
+                        puts 2
                         :updated
                       elsif local_object_md5 == remote_object_md5
                         :identical
                       else
+
+                        puts "!!!!"
+                        puts local_object_md5
+                        puts "@@@@"
+                        puts remote_object_md5
+                        puts "#####"
+
                         if !gzipped
                           # we're not gzipped, object hashes being different indicates updated content
+                          puts 3
                           :updated
                         elsif !encoding_match? || local_content_md5 != remote_content_md5
+                          puts 4
                           # we're gzipped, so we checked the content MD5, and it also changed
                           :updated
                         else
@@ -239,7 +253,12 @@ module Middleman
       end
 
       def remote_object_md5
-        s3_resource.etag
+        @etag ||= begin
+          etag = s3_resource.etag rescue ''
+          etag = etag[1..-1] if etag.start_with?('"')
+          etag = etag[0...-1] if etag.end_with?('"')
+          etag
+        end
       end
 
       def encoding_match?

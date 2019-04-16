@@ -75,7 +75,6 @@ module Middleman
 
             Aws::S3::Client.new(client_options)
           end
-
         end
       end
 
@@ -140,36 +139,14 @@ module Middleman
 
 
 
-      # def connection
-      #   connection_options = {
-      #     :endpoint => s3_sync_options.endpoint,
-      #     :region => s3_sync_options.region,
-      #     :path_style => s3_sync_options.path_style
-      #   }
-      #
-      #   if s3_sync_options.aws_access_key_id && s3_sync_options.aws_secret_access_key
-      #     connection_options.merge!({
-      #       :aws_access_key_id => s3_sync_options.aws_access_key_id,
-      #       :aws_secret_access_key => s3_sync_options.aws_secret_access_key
-      #     })
-      #
-      #     # If using a assumed role
-      #     connection_options.merge!({
-      #       :aws_session_token => s3_sync_options.aws_session_token
-      #     }) if s3_sync_options.aws_session_token
-      #   else
-      #     connection_options.merge!({ :use_iam_profile => true })
-      #   end
-      #   #@connection ||= Fog::Storage::AWS.new(connection_options)
-      #   @connection ||= Aws::S3::Client.new(connection_options)
-      # end
 
       def remote_resource_for_path(path)
-        bucket_files.find { |f| f.key == "#{s3_sync_options.prefix}#{path}" }
+        bucket_files.find { |f| f == "#{s3_sync_options.prefix}#{path}" }
       end
 
       def s3_sync_resources
         @s3_sync_resources ||= {}
+        @s3_sync_resources
       end
 
       def paths
