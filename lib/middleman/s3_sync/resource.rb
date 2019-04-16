@@ -110,9 +110,7 @@ module Middleman
           begin
             bucket.put_object(to_h.merge(body:body.read)) unless options.dry_run
           rescue Exception => e
-            puts e.message
-            puts "Caught it"
-            #puts to_h.merge(body:body)
+            say_status(Ansi.red("Caught Error: #{e.message}"))
           end
         }
       end
@@ -167,27 +165,16 @@ module Middleman
                       end
                     elsif local? && remote?
                       if options.force
-                        puts 1
                         :updated
                       elsif not metadata_match?
-                        puts 2
                         :updated
                       elsif local_object_md5 == remote_object_md5
                         :identical
                       else
-
-                        puts "!!!!"
-                        puts local_object_md5
-                        puts "@@@@"
-                        puts remote_object_md5
-                        puts "#####"
-
                         if !gzipped
                           # we're not gzipped, object hashes being different indicates updated content
-                          puts 3
                           :updated
                         elsif !encoding_match? || local_content_md5 != remote_content_md5
-                          puts 4
                           # we're gzipped, so we checked the content MD5, and it also changed
                           :updated
                         else
@@ -206,6 +193,8 @@ module Middleman
                     else
                       :ignored
                     end
+
+        @status
       end
 
       def local?
@@ -259,6 +248,9 @@ module Middleman
           etag = etag[0...-1] if etag.end_with?('"')
           etag
         end
+
+        @etag
+
       end
 
       def encoding_match?
@@ -271,6 +263,7 @@ module Middleman
 
       def local_object_md5
         @local_object_md5 ||= Digest::MD5.hexdigest(File.read(local_path))
+        @local_object_md5
       end
 
       def local_content_md5
