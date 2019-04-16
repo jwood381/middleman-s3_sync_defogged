@@ -52,14 +52,39 @@ module Middleman
         delete_resources
       end
 
+      def client
 
+        @@client_lock.synchronize do
+          @client ||= begin
+            client_options = {
+                region:s3_sync_options.region,
+                credentials:nil
+            }
+
+            client_options[:endpoint]= s3_sync_options.endpoint if s3_sync_options.endpoint
+
+            if s3_sync_options.aws_access_key_id && s3_sync_options.aws_secret_access_key
+              client_options[:credentials] = Aws::Credentials.new(
+                  s3_sync_options.aws_access_key_id,
+                  s3_sync_options.aws_secret_access_key,
+                  s3_sync_options.aws_session_token
+              )
+            else
+              client_options[:credentials] = Aws::InstanceProfileCredentials.new
+            end
+
+            Aws::S3::Client.new(client_options)
+          end
+
+        end
+      end
 
       def bucket
         @@bucket_lock.synchronize do
           @bucket ||= begin
             #bucket = connection.directories.get(s3_sync_options.bucket, :prefix => s3_sync_options.prefix
             #
-            bucket = S3::Bucket.new(s3_sync_options.bucket, client:client)
+            bucket = Aws::S3::Bucket.new(s3_sync_options.bucket, client:client)
             raise "Bucket #{s3_sync_options.bucket} doesn't exist!" unless bucket and bucket.exists?
             bucket
           end
@@ -100,8 +125,8 @@ module Middleman
       def update_bucket_website
         opts = {bucket:s3_sync_options.bucket,website_configuration:{}}
 
-        opts[:website_configuration][:index_document] = s3_sync_options.index_document if s3_sync_options.index_document
-        opts[:website_configuration][:error_document] = s3_sync_options.error_document if s3_sync_options.error_document
+        opts[:website_configuration][:index_document] = { suffix:s3_sync_options.index_document } if s3_sync_options.index_document
+        opts[:website_configuration][:error_document] = {key:s3_sync_options.error_document} if s3_sync_options.error_document
 
         if opts[:website_configuration][:error_document] && !opts[:website_configuration][:index_document]
           raise 'S3 requires `index_document` if `error_document` is specified'
@@ -113,31 +138,7 @@ module Middleman
         end
       end
 
-      def client
 
-        @@client_lock.synchronize do
-          @client ||= begin
-            client_options = {
-                endpoint: s3_sync_options.endpoint,
-                region:s3_sync_options.region,
-                credentials:nil
-            }
-
-            if s3_sync_options.aws_access_key_id && s3_sync_options.aws_secret_access_key
-              client_options[:credentials] = Aws::Credentials.new(
-                  s3_sync_options.aws_access_key_id,
-                  s3_sync_options.aws_secret_access_key,
-                  s3_sync_options.aws_session_token
-              )
-            else
-              client_options[:credentials] = Aws::InstanceProfileCredentials.new
-            end
-
-            Aws::S3::Client.new(client_options)
-          end
-
-        end
-      end
 
       # def connection
       #   connection_options = {

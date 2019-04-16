@@ -20,7 +20,12 @@ module Middleman
 
       # S3 resource as returned by a HEAD request
       def full_s3_resource
-        @full_s3_resource ||= client.head_object(bucket:Middleman::S3Sync.s3_sync_options.bucket,key:remote_path)
+
+        begin
+          @full_s3_resource ||= client.head_object(bucket:Middleman::S3Sync.s3_sync_options.bucket,key:remote_path)
+        rescue Aws::S3::Errors::NotFound
+          nil
+        end
       end
 
       def remote_path
@@ -29,11 +34,15 @@ module Middleman
       alias :key :remote_path
 
       def to_h
+
+
         attributes = {
           :key => key,
           :acl => options.acl,
           :content_type => content_type,
-          CONTENT_MD5_KEY => local_content_md5
+          :metadata => {
+            CONTENT_MD5_KEY => local_content_md5
+          }
         }
 
         if caching_policy
@@ -92,9 +101,16 @@ module Middleman
 
       def create!
         say_status "#{ANSI.green{"Creating"}} #{remote_path}#{ gzipped ? ANSI.white {' (gzipped)'} : ''}"
+
         local_content { |body|
           #bucket.files.create(to_h.merge(body: body)) unless options.dry_run
-          bucket.put_object(to_h.merge(body:body))
+          begin
+            bucket.put_object(to_h.merge(body:body.read)) unless options.dry_run
+          rescue Exception => e
+            puts e.message
+            puts "Caught it"
+            puts to_h.merge(body:body)
+          end
         }
       end
 
