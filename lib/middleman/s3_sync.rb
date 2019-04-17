@@ -66,7 +66,11 @@ module Middleman
       end
 
       def invalidate_cloudfront
-        return unless s3_sync_options.invalidate_after_sync and s3_sync_options.distribution_id
+        return unless s3_sync_options.invalidate_after_sync and
+            s3_sync_options.distribution_id and
+            s3_sync_options.distribution_id.is_a?(String) and
+            s3_sync_options.distribution_id.length > 0
+
 
         cf = changed_files and changed_files.size >0 and changed_files.size <= 999 ? changed_files : ['*']
 
