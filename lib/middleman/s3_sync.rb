@@ -1,6 +1,3 @@
-#require 'fog/aws'
-#require 'fog/aws/storage'
-
 require 'aws-sdk-s3'
 require 'aws-sdk-cloudfront'
 require 'digest/md5'
