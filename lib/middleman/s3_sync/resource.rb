@@ -21,6 +21,7 @@ module Middleman
       # S3 resource as returned by a HEAD request
       def full_s3_resource
 
+
         begin
           @full_s3_resource ||= client.head_object(bucket:Middleman::S3Sync.s3_sync_options.bucket,key:remote_path)
         rescue Aws::S3::Errors::NotFound
@@ -29,7 +30,7 @@ module Middleman
       end
 
       def remote_path
-        s3_resource and s3_resource.is_a?(String) ? s3_resource : "#{options.prefix}#{path}"
+        (s3_resource and s3_resource.is_a?(String) and s3_resource.strip.size > 0) ? s3_resource : "#{options.prefix}#{path}"
       end
       alias :key :remote_path
 
@@ -118,7 +119,8 @@ module Middleman
             changed_files.push(h[:key])
             bucket.put_object(h) unless options.dry_run
           rescue Exception => e
-            say_status(Ansi.red("Caught Error: #{e.message}"))
+            say_status(ANSI.red("Caught Error: #{e.message}"))
+            puts e.backtrace
           end
         }
       end
