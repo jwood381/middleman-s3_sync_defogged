@@ -14,6 +14,8 @@ module Middleman
     option :aws_access_key_id, ENV['AWS_ACCESS_KEY_ID'] , 'The AWS access key id'
     option :aws_secret_access_key, ENV['AWS_SECRET_ACCESS_KEY'], 'The AWS secret access key'
     option :aws_session_token, ENV['AWS_SESSION_TOKEN'] || ENV['AWS_SECURITY_TOKEN'], 'The AWS session token (for assuming roles)'
+    option :distribution_id, 'id of the cloudfront distribution to invalidate with changes'
+    option :invalidate_after_sync, false, 'Invalidate changes after sync'
     option :after_build, false, 'Whether to synchronize right after the build'
     option :build_dir, nil, 'Where the built site is stored'
     option :delete, true, 'Whether to delete resources that do not have a local equivalent'

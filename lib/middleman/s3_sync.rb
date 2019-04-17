@@ -2,7 +2,7 @@
 #require 'fog/aws/storage'
 
 require 'aws-sdk-s3'
-
+require 'aws-sdk-cloudfront'
 require 'digest/md5'
 require 'middleman/s3_sync/version'
 require 'middleman/s3_sync/options'
@@ -25,6 +25,8 @@ module Middleman
       @@bucket_files_lock = Mutex.new
       @@client_lock = Mutex.new
 
+
+
       attr_accessor :s3_sync_options
       attr_accessor :mm_resources
       attr_reader   :app
@@ -43,13 +45,57 @@ module Middleman
         say_status "Ready to apply updates to #{s3_sync_options.bucket}."
 
         update_bucket_versioning
-
         update_bucket_website
 
         ignore_resources
         create_resources
         update_resources
         delete_resources
+
+        if(changed_files and changed_files.size > 0)
+          unless s3_sync_options.dry_run
+
+            invalidate_cloudfront
+
+          end
+        end
+      end
+
+      def changed_files
+        @changed_files ||= []
+      end
+
+      def invalidate_cloudfront
+        return unless s3_sync_options.invalidate_after_sync and s3_sync_options.distribution_id
+
+        cf = changed_files and changed_files.size >0 and changed_files.size <= 999 ? changed_files : ['*']
+
+        cloudfront_client.create_invalidation(
+                             distribution_id:s3_sync_options.distribution_id,
+                             invalidation_batch: {
+                                 quantity:cf,
+                                 items:cf
+                             },
+                             caller_reference: Time.now.to_i.to_s
+        )
+      end
+
+      def cloudfront_client
+        @cloudfront_client ||= begin
+          Aws::CloudFront::Client.new(
+              region:s3_sync_options.region,
+              credentials:client_aws_credentials
+          )
+        end
+      end
+
+      def client_aws_credentials
+        s3_sync_options.aws_access_key_id && s3_sync_options.aws_secret_access_key ?
+          Aws::Credentials.new(
+              s3_sync_options.aws_access_key_id,
+              s3_sync_options.aws_secret_access_key,
+              s3_sync_options.aws_session_token
+          ) : Aws::InstanceProfileCredentials.new
       end
 
       def client
@@ -58,21 +104,9 @@ module Middleman
           @client ||= begin
             client_options = {
                 region:s3_sync_options.region,
-                credentials:nil
+                credentials:client_aws_credentials
             }
-
             client_options[:endpoint]= s3_sync_options.endpoint if s3_sync_options.endpoint
-
-            if s3_sync_options.aws_access_key_id && s3_sync_options.aws_secret_access_key
-              client_options[:credentials] = Aws::Credentials.new(
-                  s3_sync_options.aws_access_key_id,
-                  s3_sync_options.aws_secret_access_key,
-                  s3_sync_options.aws_session_token
-              )
-            else
-              client_options[:credentials] = Aws::InstanceProfileCredentials.new
-            end
-
             Aws::S3::Client.new(client_options)
           end
         end
@@ -118,10 +152,18 @@ module Middleman
 
       protected
       def update_bucket_versioning
-        client.put_bucket_versioning(bucket:s3_sync_options.bucket,status:"Enabled") if s3_sync_options.version_bucket
+        return unless s3_sync_options.version_bucket
+        resp=client.get_bucket_versioning(bucket:s3_sync_options.bucket)
+        unless(resp.to_h['status'] == 'Enabled')
+          client.put_bucket_versioning(bucket:s3_sync_options.bucket,status:"Enabled")
+          say_status "Enabled Versioning"
+        else
+          say_status Ansi.green("Versioning already enabled")
+        end
       end
 
       def update_bucket_website
+
         opts = {bucket:s3_sync_options.bucket,website_configuration:{}}
 
         opts[:website_configuration][:index_document] = { suffix:s3_sync_options.index_document } if s3_sync_options.index_document
@@ -131,9 +173,17 @@ module Middleman
           raise 'S3 requires `index_document` if `error_document` is specified'
         end
 
-        unless opts.empty?
-          say_status "Putting bucket website: #{opts.to_json}"
-          client.put_bucket_website(opts)
+        unless opts[:website_configuration].empty?
+
+          resp=client.get_bucket_website(bucket:s3_sync_options.bucket)
+
+          if(resp.to_h == opts[:website_configuration])
+            say_status ANSI.green('Website Configuration already up-to-date')
+          else
+            say_status "Updating Website Configuration: #{opts.to_json}"
+            client.put_bucket_website(opts)
+          end
+
         end
       end
 

@@ -1,38 +1,15 @@
 
-# Middleman::S3Sync
+# Middleman::S3Sync_Defogged
 
-[![Join the chat at https://gitter.im/fredjean/middleman-s3_sync](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/fredjean/middleman-s3_sync?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Code Climate](https://codeclimate.com/github/fredjean/middleman-s3_sync.svg)](https://codeclimate.com/github/fredjean/middleman-s3_sync) [![Build Status](https://travis-ci.org/fredjean/middleman-s3_sync.svg?branch=master)](https://travis-ci.org/fredjean/middleman-s3_sync)
+This code started out based on [Middleman-s3_sync](https://github.com/fredjean/middleman-s3_sync)
+with the fog library replaced by the aws-sdk-s3 library.
+
+Many features have not been tested. Use at your own risk!
+
 
 This gem determines which files need to be added, updated and optionally deleted
 and only transfer these files up. This reduces the impact of an update
 on a web site hosted on S3.
-
-#### Why not Middleman Sync?
-
-[Middleman Sync](https://github.com/karlfreeman/middleman-sync) does a
-great job to push [Middleman](http://middlemanapp.com)  generated
-websites to S3. The only issue I have with it is that it pushes
-every files under build to S3 and doesn't seem to properly delete files
-that are no longer needed.
-
-#### Version Support
-
-* Use middleman-s3_sync version 4.x for Middleman 4.x
-* Use middleman-s3_sync version 3.x for Middleman 3.x
-
-## Installation
-
-Add this line to your application's Gemfile:
-
-    gem 'middleman-s3_sync'
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install middleman-s3_sync
 
 ## Usage
 

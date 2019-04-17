@@ -63,7 +63,10 @@ module Middleman
         end
 
         if redirect?
-          attributes[REDIRECT_KEY] = redirect_url
+          # attributes[REDIRECT_KEY] = redirect_url
+
+          #jwood change --- not sure if it was needed--- just guessing based on the CONTENT_MD5 header
+          attributes[:metadata][REDIRECT_KEY] = redirect_url
         end
 
         attributes
@@ -79,6 +82,8 @@ module Middleman
           #s3_resource.merge_attributes(to_h)
           #s3_resource.body = body
           #s3_resource.save unless options.dry_run
+
+          #Do not track change here
           create!(true)
         }
       end
@@ -95,6 +100,7 @@ module Middleman
       def destroy!
         say_status "#{ANSI.red{"Deleting"}} #{remote_path}"
         #bucket.files.destroy remote_path unless options.dry_run
+        changed_files.push(remote_path)
         bucket.delete_objects(
                   delete: {
                       key: remote_path
@@ -108,7 +114,9 @@ module Middleman
         local_content { |body|
           #bucket.files.create(to_h.merge(body: body)) unless options.dry_run
           begin
-            bucket.put_object(to_h.merge(body:body.read)) unless options.dry_run
+            h=to_h.merge(body:body.read)
+            changed_files.push(h[:key])
+            bucket.put_object(h) unless options.dry_run
           rescue Exception => e
             say_status(Ansi.red("Caught Error: #{e.message}"))
           end
@@ -298,6 +306,10 @@ module Middleman
 
       def client
         Middleman::S3Sync.client
+      end
+
+      def changed_files
+        Middleman::S3Sync.changed_files
       end
 
       def build_dir
